@@ -125,6 +125,7 @@ class DBLogHandler(Handler):
                 tags.append(tag)
 
             entry.add_tags(cursor, tags)
+            self.db.commit()
 
         except Exception:
             self.handleError(record)
