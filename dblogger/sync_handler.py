@@ -12,7 +12,7 @@ __all__ = ['DBLogHandler']
 class DBLogHandler(Handler):
 
     # db config and connection
-    db_config: str
+    db_config: Optional[str] = None
 
     # caches
     src_cache: Dict[str, LogSource] = {}
@@ -26,29 +26,50 @@ class DBLogHandler(Handler):
 
     def __init__(
         self, name: str,
-        db_name: str,
+        db_name: Optional[str]=None,
+        db: Optional[Any]=None,
         db_user: Optional[str]=None,
         db_password: Optional[str]=None,
         db_host: str='localhost',
         db_port: int=5432,
         level: int = NOTSET
     ):
-        if db_user is not None:
-            if db_password is not None:
-                self.db_config = f'postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}'
-            else:
-                self.db_config = f'postgresql://{db_user}@{db_host}:{db_port}/{db_name}'
-        else:
-            self.db_config = f'postgresql://{db_host}:{db_port}/{db_name}'
+        """
+        Initialize new DB logging handler
 
-        self.db = psycopg2.connect(self.db_config, cursor_factory=psycopg2.extras.DictCursor)
+        :param name: Name of the logger in the DB
+        :param db_name: DB name to use (exclusive with ``db``)
+        :param db: DB handle to use (exclusive with ``db_name``)
+        :param db_user: DB user name (optional)
+        :param db_password: DB password (optional)
+        :param db_host: DB hostname (optional, defaults to ``localhost``)
+        :param db_port: DB port (optional, defaults to ``5432``)
+        :param level: Log level, defaults to ``NOTSET`` which inherits the level from the logger
+        """
+
+        if db is not None:
+            self.db = db
+            self.db_config = None
+        else:
+            if db_user is not None:
+                if db_password is not None:
+                    self.db_config = f'postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}'
+                else:
+                    self.db_config = f'postgresql://{db_user}@{db_host}:{db_port}/{db_name}'
+            else:
+                self.db_config = f'postgresql://{db_host}:{db_port}/{db_name}'
+            self.db = psycopg2.connect(self.db_config, cursor_factory=psycopg2.extras.DictCursor)
+
         self.logger_name = name
         self.createLock()
         super().__init__(level=level)
 
     def emit(self, record: LogRecord):
-        if self.db.closed:
+        if self.db.closed and self.db_config is not None:
             self.db = psycopg2.connect(self.db_config, cursor_factory=psycopg2.extras.DictCursor)
+        elif self.db.closed:
+            raise RuntimeWarning('DB handle was closed, can not continue')
+
         cursor = self.db.cursor()
 
         try:

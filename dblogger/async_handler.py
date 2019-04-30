@@ -17,7 +17,7 @@ class DBLogHandler(Handler):
 
     # db config and connection
     db: Optional[Pool] = None
-    db_config: str
+    db_config: Optional[str] = None
 
     # state
     queue: List[LogRecord] = []
@@ -35,20 +35,38 @@ class DBLogHandler(Handler):
 
     def __init__(
         self, name: str,
-        db_name: str,
+        db_name: Optional[str]=None,
+        db: Optional[Pool]=None,
         db_user: Optional[str]=None,
         db_password: Optional[str]=None,
         db_host: str='localhost',
         db_port: int=5432,
         level: int = NOTSET
     ):
-        if db_user is not None:
-            if db_password is not None:
-                self.db_config = f'postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}'
-            else:
-                self.db_config = f'postgresql://{db_user}@{db_host}:{db_port}/{db_name}'
+        """
+        Initialize new DB logging handler
+
+        :param name: Name of the logger in the DB
+        :param db_name: DB name to use (exclusive with ``db``)
+        :param db: DB handle to use (exclusive with ``db_name``)
+        :param db_user: DB user name (optional)
+        :param db_password: DB password (optional)
+        :param db_host: DB hostname (optional, defaults to ``localhost``)
+        :param db_port: DB port (optional, defaults to ``5432``)
+        :param level: Log level, defaults to ``NOTSET`` which inherits the level from the logger
+        """
+
+        if db is not None:
+            self.db = db
+            self.db_config = None
         else:
-            self.db_config = f'postgresql://{db_host}:{db_port}/{db_name}'
+            if db_user is not None:
+                if db_password is not None:
+                    self.db_config = f'postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}'
+                else:
+                    self.db_config = f'postgresql://{db_user}@{db_host}:{db_port}/{db_name}'
+            else:
+                self.db_config = f'postgresql://{db_host}:{db_port}/{db_name}'
 
         self.logger_name = name
         self.createLock()
@@ -74,7 +92,7 @@ class DBLogHandler(Handler):
     async def log_emitter(self):
         if self.db is None:
             if self.db_config is None:
-                raise RuntimeError('Initialize Logger with a db config before trying to log anything')
+                raise RuntimeWarning('DB handle was closed, can not continue')
             self.acquire()
             self.db = await connect(dsn=self.db_config)
             self.release()
