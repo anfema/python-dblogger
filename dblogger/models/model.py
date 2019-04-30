@@ -1,5 +1,4 @@
 from typing import List, Dict, Any, Tuple, Optional, AsyncGenerator, ClassVar
-from asyncpg import Connection, Record
 
 __all__ = ['BaseModel']
 
@@ -7,14 +6,14 @@ __all__ = ['BaseModel']
 class BaseModel:
     table: ClassVar[str] = ""
 
-    def __init__(self, rowdata: Optional[Record] = None, **kwargs):
+    def __init__(self, rowdata: Optional[Dict] = None, **kwargs):
         if rowdata is not None:
             self.pk = rowdata.get('id', None)
             self.deserialize(rowdata)
         else:
             self.deserialize(kwargs)
 
-    def deserialize(self, rowdata: Record) -> None:
+    def deserialize(self, rowdata: Dict) -> None:
         """
         DB Record to model conversion
         Has to be overridden in subclasses

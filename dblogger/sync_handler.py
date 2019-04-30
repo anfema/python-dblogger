@@ -1,8 +1,10 @@
 from typing import List, Any, Optional, Dict, Tuple
-import psycopg2
 import socket
+
 from datetime import datetime
 from logging import Handler, Logger, NOTSET, LogRecord
+
+import psycopg2
 
 from .sync_models import LogLogger, LogSource, LogHost, LogFunction, LogTag, LogEntry
 

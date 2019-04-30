@@ -39,7 +39,7 @@ class LogEntry(BaseLogEntry, SyncModel):
             [self.pk, tag.pk]
         )
 
-    def tags(self, db: Any) -> Generator[LogTag, None]:
+    def tags(self, db: Any) -> Generator[LogTag, None, None]:
         sql = f"""
             SELECT t.* FROM logger_log_tag lt
             JOIN logger_tag t ON t.id = lt."tagID"

@@ -1,5 +1,4 @@
 from typing import List, Dict, Any, AsyncGenerator
-from asyncpg import Connection, Record
 
 from logging import DEBUG
 from datetime import datetime, timezone
@@ -21,7 +20,7 @@ class BaseLogEntry(BaseModel):
     logger_id: int
     hostname_id: int
 
-    def deserialize(self, rowdata: Record) -> None:
+    def deserialize(self, rowdata: Dict) -> None:
         self.level = rowdata.get('level')
         self.message = rowdata.get('message')
         self.pid = rowdata.get('pid')

@@ -1,5 +1,4 @@
 from typing import Dict, Any
-from asyncpg import Record
 
 from .model import BaseModel
 
@@ -13,7 +12,7 @@ class BaseLogFunction(BaseModel):
     line_number: int
     source_id: int
 
-    def deserialize(self, rowdata: Record) -> None:
+    def deserialize(self, rowdata: Dict) -> None:
         self.name = rowdata.get('name')
         self.line_number = rowdata.get('lineNumber')
         self.source_id = rowdata.get('sourceID')

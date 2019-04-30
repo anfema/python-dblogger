@@ -1,5 +1,4 @@
 from typing import Dict, Any
-from asyncpg import Record
 
 from .model import BaseModel
 
@@ -11,7 +10,7 @@ class BaseLogSource(BaseModel):
 
     path: str
 
-    def deserialize(self, rowdata: Record) -> None:
+    def deserialize(self, rowdata: Dict) -> None:
         self.path = rowdata.get('path')
 
     @classmethod
