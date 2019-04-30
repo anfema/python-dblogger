@@ -34,7 +34,7 @@ setup(
             'Operating System :: OS Independent'
         ],
         keywords='postgresql psycopg2 asyncpg logger db',
-        packages=['dblogger', 'dblogger.models', 'dblogger.async_models'. 'dblogger.sync_models'],
+        packages=['dblogger', 'dblogger.models', 'dblogger.async_models', 'dblogger.sync_models'],
         scripts=[
             'bin/create_schema.py',
         ],
