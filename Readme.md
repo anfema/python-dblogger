@@ -38,6 +38,12 @@ def setup_logger(config: Dict[str, Any]):
     root_logger.addHandler(handler)
 ```
 
+You may give the log-handler a DB handle instead of a DB configuration if you want to
+handle the DB connection yourself (or your framework already handles the DB connections).
+For that, just skip all ``db_`` parameters and give the handle to the handler with the
+``db`` parameter. Be aware that a failed connection can not be handled internally this
+way, so if your connection breaks you have to pick up the pieces by yourself.
+
 ### Tagging
 
 To add tags to your log info, use the `extra` kwarg of the logger.
