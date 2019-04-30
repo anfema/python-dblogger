@@ -38,19 +38,3 @@ class BaseModel:
         :return: Dictionary with key-value pairs to save to DB
         """
         raise NotImplementedError('Subclasses of Model have to override .serialize_data()')
-
-    @classmethod
-    def make_where_statement(cls, data: Dict[str, Any], prefix: Optional[str]=None) -> Tuple[str, List[Any]]:
-        where: List[str] = []
-        values: List[Any] = []
-        for idx, item in enumerate(data.items()):
-            key, value = item
-            key = key.replace("'", "''")
-            if prefix is not None:
-                where.append(f'"{prefix}.{key}" = ${idx + 1}')
-            else:
-                where.append(f'"{key}" = ${idx + 1}')
-            values.append(value)
-
-        where_clause = ' AND '.join(where)
-        return where_clause, values

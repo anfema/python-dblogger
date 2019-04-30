@@ -10,9 +10,25 @@ __all__ = ['SyncModel']
 class SyncModel(BaseModel):
 
     @classmethod
+    def make_where_statement(cls, data: Dict[str, Any], prefix: Optional[str]=None) -> Tuple[str, List[Any]]:
+        where: List[str] = []
+        values: List[Any] = []
+        for idx, item in enumerate(data.items()):
+            key, value = item
+            key = key.replace("'", "''")
+            if prefix is not None:
+                where.append(f'"{prefix}.{key}" = %s')
+            else:
+                where.append(f'"{key}" = %s')
+            values.append(value)
+
+        where_clause = ' AND '.join(where)
+        return where_clause, values
+
+    @classmethod
     def load(cls, db: Any, **kwargs) -> Optional[Any]:
         ser = cls.serialize_data(kwargs)
-        where_clause, values = BaseModel.make_where_statement(ser)
+        where_clause, values = SyncModel.make_where_statement(ser)
 
         db.execute(f'SELECT * FROM {cls.table} WHERE {where_clause};', values)
         data = db.fetchone()
@@ -23,7 +39,7 @@ class SyncModel(BaseModel):
     @classmethod
     def load_all(cls, db: Any, **kwargs) -> List[Any]:
         ser = cls.serialize_data(kwargs)
-        where_clause, values = BaseModel.make_where_statement(ser)
+        where_clause, values = SyncModel.make_where_statement(ser)
 
         db.execute(f'SELECT * FROM {cls.table} WHERE {where_clause};', values)
         return [cls(rowdata=data) for data in db.fetchall()]
@@ -34,7 +50,7 @@ class SyncModel(BaseModel):
 
         value_list = [f'"{v}"' for v in ser.keys()]
         values = ser.values()
-        params = ', '.join([f'${idx + 1}' for idx, _ in enumerate(values)])
+        params = ', '.join([f'%s' for _ in values])
 
         sql = f'''
             INSERT INTO {cls.table} ({', '.join(value_list)})
@@ -45,7 +61,7 @@ class SyncModel(BaseModel):
             sql += ' ON CONFLICT DO NOTHING'
 
         sql += ' RETURNING *'
-        db.execute(sql, values)
+        db.execute(sql, list(values))
         data = db.fetchone()
         return cls(rowdata=data)
 
