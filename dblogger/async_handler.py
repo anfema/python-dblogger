@@ -63,6 +63,14 @@ class DBLogHandler(Handler):
             self.emitter = loop.create_task(self.log_emitter())
         self.release()
 
+    async def drain(self):
+        if len(self.queue) > 0 and self.emitter is None:
+            await self.log_emitter()
+
+        if self.emitter is not None:
+            await self.emitter
+
+
     async def log_emitter(self):
         if self.db is None:
             if self.db_config is None:
