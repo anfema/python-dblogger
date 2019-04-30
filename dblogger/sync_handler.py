@@ -5,6 +5,7 @@ from datetime import datetime
 from logging import Handler, Logger, NOTSET, LogRecord
 
 import psycopg2
+from psycopg2.extras import DictCursor
 
 from .sync_models import LogLogger, LogSource, LogHost, LogFunction, LogTag, LogEntry
 
@@ -60,7 +61,7 @@ class DBLogHandler(Handler):
                     self.db_config = f'postgresql://{db_user}@{db_host}:{db_port}/{db_name}'
             else:
                 self.db_config = f'postgresql://{db_host}:{db_port}/{db_name}'
-            self.db = psycopg2.connect(self.db_config, cursor_factory=psycopg2.extras.DictCursor)
+            self.db = psycopg2.connect(self.db_config, cursor_factory=DictCursor)
 
         self.logger_name = name
         self.createLock()
@@ -68,7 +69,7 @@ class DBLogHandler(Handler):
 
     def emit(self, record: LogRecord):
         if self.db.closed and self.db_config is not None:
-            self.db = psycopg2.connect(self.db_config, cursor_factory=psycopg2.extras.DictCursor)
+            self.db = psycopg2.connect(self.db_config, cursor_factory=DictCursor)
         elif self.db.closed:
             raise RuntimeWarning('DB handle was closed, can not continue')
 
