@@ -73,3 +73,41 @@ To initialize the logging schema in the database import the `schema.sql` SQL fil
 data dir of this package.
 
 TODO: Make setup script
+
+
+### Searching the log from the command line
+
+To access the log DB from the commandline a script named `logtail` will be installed in the
+virtualenv bin directory. Be sure to activate the virtualenv before running the command or run
+it through `pipenv run logtail`
+
+To set the DB connection options you may either set the environment variable `PGURI` or supply
+the connection string with the `--db` parameter on the command line.
+
+```
+usage: logtail [-h] [--db DB] [--exclude EXCLUDE] [--level LEVEL]
+               [--logger LOGGER [LOGGER ...]]
+               [--exclude-tag EXCLUDE_TAG [EXCLUDE_TAG ...]]
+               [--tags ONLY_TAGS [ONLY_TAGS ...]] [--from FROM_DATE]
+               [--to TO_DATE]
+
+Display a tail -f like log output
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --db DB               DB Connection URI, if not set defaults to the
+                        environment variable `PGURI` or an empty value
+  --exclude EXCLUDE     Exclude log items that match the regex
+  --level LEVEL         Only display log items with this level or higher (use
+                        name or int)
+  --logger LOGGER [LOGGER ...]
+                        Only display items of one of these named loggers
+  --exclude-tag EXCLUDE_TAG [EXCLUDE_TAG ...]
+                        Exclude log items that match this tag
+  --tags ONLY_TAGS [ONLY_TAGS ...]
+                        Only display log items that match at least one of the
+                        tags
+  --from FROM_DATE      Display log items from this date (1 hour interval)
+  --to TO_DATE          Display log items to this date (to override the 1 hour
+                        interval from --from)
+```
