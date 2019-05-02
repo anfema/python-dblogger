@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Tuple, Optional, AsyncGenerator, ClassVar
+from typing import List, Dict, Any, Tuple, Optional, ClassVar
 
 __all__ = ['BaseModel']
 

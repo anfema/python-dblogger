@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Tuple, Optional, AsyncGenerator, ClassVar
+from typing import List, Dict, Any, Tuple, Optional, ClassVar
 
 from dblogger.models.model import BaseModel
 
@@ -13,7 +13,7 @@ class SyncModel(BaseModel):
     def make_where_statement(cls, data: Dict[str, Any], prefix: Optional[str]=None) -> Tuple[str, List[Any]]:
         where: List[str] = []
         values: List[Any] = []
-        for idx, item in enumerate(data.items()):
+        for item in data.items():
             key, value = item
             key = key.replace("'", "''")
             if prefix is not None:
@@ -27,7 +27,10 @@ class SyncModel(BaseModel):
 
     @classmethod
     def load(cls, db: Any, **kwargs) -> Optional[Any]:
+        pk = kwargs.pop('pk', None)
         ser = cls.serialize_data(kwargs)
+        if pk is not None:
+            ser['id'] = pk
         where_clause, values = SyncModel.make_where_statement(ser)
 
         db.execute(f'SELECT * FROM {cls.table} WHERE {where_clause};', values)

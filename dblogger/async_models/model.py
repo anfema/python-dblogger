@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Tuple, Optional, AsyncGenerator, ClassVar
+from typing import List, Dict, Any, Tuple, Optional, ClassVar
 from asyncpg import Connection, Record
 
 from dblogger.models.model import BaseModel
@@ -26,7 +26,10 @@ class AsyncModel(BaseModel):
 
     @classmethod
     async def load(cls, db: Connection, **kwargs) -> Optional[Any]:
+        pk = kwargs.pop('pk', None)
         ser = cls.serialize_data(kwargs)
+        if pk is not None:
+            ser['id'] = pk
         where_clause, values = AsyncModel.make_where_statement(ser)
 
         data = await db.fetchrow(f'SELECT * FROM {cls.table} WHERE {where_clause};', *values)

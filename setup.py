@@ -26,19 +26,17 @@ setup(
             'Intended Audience :: Developers',
             'License :: OSI Approved :: BSD License',
             'Programming Language :: Python',
-            'Programming Language :: Python :: 3',
-            'Programming Language :: Python :: 3.4',
-            'Programming Language :: Python :: 3.5',
-            'Programming Language :: Python :: 3.6',
             'Programming Language :: Python :: 3.7',
             'Operating System :: OS Independent'
         ],
         keywords='postgresql psycopg2 asyncpg logger db',
         packages=['dblogger', 'dblogger.models', 'dblogger.async_models', 'dblogger.sync_models'],
         scripts=[
-            'bin/create_schema.py',
+            'bin/dblogger_create_schema.py',
+            'bin/logtail'
         ],
         install_requires=[
+            'termcolor'
         ],
         dependency_links=[
         ]

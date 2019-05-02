@@ -1,0 +1,324 @@
+#!/usr/bin/env python
+
+run_mode = None
+
+try:
+    import asyncpg
+    import asyncio
+    from dblogger.async_models import LogEntry, LogLogger, LogTag
+    run_mode = 'async'
+except ImportError:
+    try:
+        import psycopg2
+        from psycopg2.extras import DictCursor
+        from dblogger.sync_models import LogEntry, LogLogger, LogTag
+        run_mode = 'sync'
+    except ImportError:
+        raise RuntimeError("Please install a database driver, you'll need either psycopg2 or asyncpg")
+
+from typing import List, Optional
+import argparse
+import re
+import os
+from time import sleep
+from logging import getLevelName
+from datetime import timedelta, datetime, timezone
+from termcolor import colored
+
+longest_logger = 5
+
+
+def print_log(entry: LogEntry, logger: LogLogger, tags: List[LogTag]):
+    """
+    Print log line to terminal
+    """
+    global longest_logger
+
+    level = (getLevelName(entry.level) + (' ' * 8))[0:8]
+    tags = ' ' if len(tags) > 0 else ''
+    for t in tags:
+        tags += '[' + t.name + ']'
+
+    color = "white"
+    attrib = []
+    if entry.level >= 10:
+        color = "cyan"
+        attrib = []
+    if entry.level >= 20:
+        color = 'white'
+        attrib = ['bold']
+    if entry.level >= 30:
+        color = 'yellow'
+        attrib = ['bold']
+    if entry.level >= 40:
+        color = 'red'
+        attrib = ['bold']
+    if entry.level >= 50:
+        color = 'magenta'
+        attrib = ['bold']
+
+    if len(logger.name) > longest_logger:
+        longest_logger = len(logger.name)
+
+    print(colored('{date} {level} ({logger}){tags}: {msg}'.format(
+        date=entry.time,
+        level=level,
+        logger=(logger.name + ' ' * longest_logger)[0:longest_logger],
+        tags=tags,
+        msg=entry.message
+    ), color, attrs=attrib))
+
+def is_printable(
+    item: LogEntry,
+    logger: LogLogger,
+    item_tags: List[LogTag],
+    excl: re,
+    level: int,
+    loggers: Optional[List[str]],
+    exclude_tag: Optional[List[str]],
+    tags: Optional[List[str]]
+):
+    """
+    Check if the log entry is allowed to show up in the output after
+    filters are applied
+    """
+    result = True
+    if excl and excl.match(item.message):
+        result = False
+    elif item.level < level:
+        result = False
+    elif loggers and logger.name not in loggers:
+        result = False
+
+    if result == True:
+        if tags:
+            result = False
+            for tag in item_tags:
+                if tag in tags:
+                    result = True
+                    break
+        if exclude_tag:
+            for tag in item_tags:
+                if tag in exclude_tag:
+                    result = False
+                    break
+
+    return result
+
+async def log_tail_async(
+    db_url: Optional[str],
+    exclude: Optional[List[str]]=None,
+    level: int=0,
+    loggers: Optional[List[str]]=None,
+    exclude_tag: Optional[List[str]]=None,
+    tags: Optional[List[str]]=None,
+    from_date: Optional[datetime]=None,
+    to_date: Optional[datetime]=None
+):
+    try:
+        db = await asyncpg.connect(dsn=db_url)
+    except Exception as e:
+        print(colored(f"PostgreSQL ERROR: {e}", 'red'))
+        return
+
+    if exclude is not None and len(exclude) > 0:
+        excl = re.compile(exclude[0])
+    else:
+        excl = None
+
+    def printable(item: LogEntry, logger: LogLogger, item_tags: List[LogTag]):
+        return is_printable(item, logger, item_tags, excl, level, loggers, exclude_tag, tags)
+
+    if from_date is not None:
+        if to_date is None:
+            to_date = from_date + timedelta(hours=1)
+        items = await LogEntry.load_all_with_date(db, from_date=from_date, to_date=to_date)
+        if to_date is not None:
+            print(colored("Displaying logs from {} to {}".format(from_date, to_date), 'white', attrs=['bold']))
+        else:
+            print(colored("Displaying logs from {} to {}".format(from_date, from_date + timedelta(hours=1)), 'white', attrs=['bold']))
+        print(colored("=" * 80, 'white', attrs=['bold']))
+
+        for item in items:
+            if printable(item, await item.logger(db), await item.tags(db)):
+                print_log(item, await item.logger(db), await item.tags(db))
+    else:
+        last10 = await LogEntry.load_all_with_date(db, limit=10)
+        last10.reverse()
+        for item in last10:
+            if printable(item, await item.logger(db), await item.tags(db)):
+                print_log(item, await item.logger(db), await item.tags(db))
+        last_id = last10[-1].pk
+        while (True):
+            await asyncio.sleep(0.5)
+            entries = await LogEntry.load_all_after_id(db, last_id)
+            for item in entries:
+                if printable(item, await item.logger(db), await item.tags(db)):
+                    print_log(item, await item.logger(db), await item.tags(db))
+                last_id = item.pk
+
+def log_tail_sync(
+    db_url: Optional[str],
+    exclude: Optional[List[str]]=None,
+    level: int=0,
+    loggers: Optional[List[str]]=None,
+    exclude_tag: Optional[List[str]]=None,
+    tags: Optional[List[str]]=None,
+    from_date: Optional[datetime]=None,
+    to_date: Optional[datetime]=None
+):
+    try:
+        if db_url is None:
+            db_url = 'postgresql://localhost'
+        conn = psycopg2.connect(dsn=db_url, cursor_factory=DictCursor)
+    except psycopg2.OperationalError as e:
+        print(colored(f"PostgreSQL ERROR: {e}", 'red'))
+        exit(1)
+    db = conn.cursor()
+
+    if exclude is not None and len(exclude) > 0:
+        excl = re.compile(exclude[0])
+    else:
+        excl = None
+
+    def printable(item: LogEntry, logger: LogLogger, item_tags: List[LogTag]):
+        return is_printable(item, logger, item_tags, excl, level, loggers, exclude_tag, tags)
+
+    if from_date is not None:
+        if to_date is None:
+            to_date = from_date + timedelta(hours=1)
+        items = LogEntry.load_all_with_date(db, from_date=from_date, to_date=to_date)
+        if to_date is not None:
+            print(colored("Displaying logs from {} to {}".format(from_date, to_date), 'white', attrs=['bold']))
+        else:
+            print(colored("Displaying logs from {} to {}".format(from_date, from_date + timedelta(hours=1)), 'white', attrs=['bold']))
+        print(colored("=" * 80, 'white', attrs=['bold']))
+
+        for item in items:
+            if printable(item, item.logger(db), item.tags(db)):
+                print_log(item, item.logger(db), item.tags(db))
+    else:
+        last10 = LogEntry.load_all_with_date(db, limit=10)
+        last10.reverse()
+        for item in last10:
+            if printable(item, item.logger(db), item.tags(db)):
+                print_log(item, item.logger(db), item.tags(db))
+        last_id = last10[-1].pk
+        while (True):
+            sleep(0.5)
+            entries = LogEntry.load_all_after_id(db, last_id)
+            for item in entries:
+                if printable(item, item.logger(db), item.tags(db)):
+                    print_log(item, item.logger(db), item.tags(db))
+                last_id = item.pk
+
+def valid_date(s):
+    try:
+        result = datetime.strptime(s, "%Y-%m-%d")
+    except ValueError:
+        try:
+            result = datetime.strptime(s, "%Y-%m-%d %H:%M")
+        except ValueError:
+            msg = "Not a valid date: '{0}'.".format(s)
+            raise argparse.ArgumentTypeError(msg)
+    return result.replace(tzinfo=timezone.utc)
+
+def main():
+    parser = argparse.ArgumentParser(description='Display a tail -f like log output')
+
+    parser.add_argument(
+        '--db',
+        dest='db',
+        type=str,
+        default=None,
+        help='DB Connection URI, if not set defaults to the environment variable `PGURI` or an empty value'
+    )
+    parser.add_argument(
+        '--exclude',
+        dest='exclude',
+        help='Exclude log items that match the regex'
+    )
+    parser.add_argument(
+        '--level',
+        dest='level',
+        default='NOTSET',
+        help='Only display log items with this level or higher (use name or int)'
+    )
+    parser.add_argument(
+        '--logger',
+        dest='logger',
+        nargs='+',
+        help='Only display items of one of these named loggers'
+    )
+    parser.add_argument(
+        '--exclude-tag',
+        dest='exclude_tag',
+        nargs='+',
+        help='Exclude log items that match this tag'
+    )
+    parser.add_argument(
+        '--tags',
+        dest='only_tags',
+        nargs='+',
+        help='Only display log items that match at least one of the tags'
+    )
+    parser.add_argument(
+        '--from',
+        dest='from_date',
+        type=valid_date,
+        help='Display log items from this date (1 hour interval)'
+    )
+    parser.add_argument(
+        '--to',
+        dest='to_date',
+        type=valid_date,
+        help='Display log items to this date (to override the 1 hour interval from --from)'
+    )
+
+    options = parser.parse_args()
+
+    try:
+        if str(int(options.level)) == options.level:
+            level = int(options.level)
+        else:
+            level = getLevelName(options.level)
+    except ValueError:
+        level = getLevelName(options.level)
+
+    db_url = options.db
+    if db_url is None:
+        db_url = os.environ.get('PGURI', None)
+
+    if run_mode == 'sync':
+        try:
+            log_tail_sync(
+                db_url=db_url,
+                exclude=options.exclude,
+                level=level,
+                loggers=options.logger,
+                exclude_tag=options.exclude_tag,
+                tags=options.only_tags,
+                from_date=options.from_date,
+                to_date=options.to_date
+            )
+        except KeyboardInterrupt:
+            pass
+    else:
+        loop = asyncio.get_event_loop()
+        # FIXME: add event handlers
+        try:
+            loop.run_until_complete(log_tail_async(
+                db_url=db_url,
+                exclude=options.exclude,
+                level=level,
+                loggers=options.logger,
+                exclude_tag=options.exclude_tag,
+                tags=options.only_tags,
+                from_date=options.from_date,
+                to_date=options.to_date
+            ))
+        except KeyboardInterrupt:
+            loop.close()
+
+if __name__ == '__main__':
+    main()

@@ -29,3 +29,7 @@ class BaseLogFunction(BaseModel):
             result['sourceID'] = data['source_id']
 
         return result
+
+    @property
+    def source(self):
+        pass
