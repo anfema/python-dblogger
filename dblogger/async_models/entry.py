@@ -105,7 +105,7 @@ class LogEntry(BaseLogEntry, AsyncModel):
         values: List[int] = []
         placeholders: List[str] = []
         for idx, tag in enumerate(tags):
-            sql += f'(${(idx * 2) + 1}, ${(idx * 2) + 2})'
+            placeholders.append(f'(${(idx * 2) + 1}, ${(idx * 2) + 2})')
             values.append(self.pk)
             values.append(tag.pk)
 

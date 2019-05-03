@@ -106,7 +106,7 @@ class LogEntry(BaseLogEntry, SyncModel):
         values: List[int] = []
         placeholders: List[str] = []
         for tag in tags:
-            sql += f'(%s, %s)'
+            placeholders.append('(%s, %s)')
             values.append(self.pk)
             values.append(tag.pk)
 
