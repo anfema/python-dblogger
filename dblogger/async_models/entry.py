@@ -136,7 +136,7 @@ class LogEntry(BaseLogEntry, AsyncModel):
         """
         results = await db.fetch(sql, self.pk)
         for result in results:
-            result = await LogTag(rowdata=result)
+            result = LogTag(rowdata=result)
             cached_tags.append(result)
 
         setattr(self, '_tags', cached_tags)
