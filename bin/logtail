@@ -28,15 +28,15 @@ from termcolor import colored
 longest_logger = 5
 
 
-def print_log(entry: LogEntry, logger: LogLogger, tags: List[LogTag]):
+def print_log(entry: LogEntry, logger: LogLogger, entry_tags: List[LogTag]):
     """
     Print log line to terminal
     """
     global longest_logger
 
     level = (getLevelName(entry.level) + (' ' * 8))[0:8]
-    tags = ' ' if len(tags) > 0 else ''
-    for t in tags:
+    tags = ' ' if len(entry_tags) > 0 else ''
+    for t in entry_tags:
         tags += '[' + t.name + ']'
 
     color = "white"
