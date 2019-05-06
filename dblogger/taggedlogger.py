@@ -9,6 +9,7 @@ class TaggedLogger(LoggerAdapter):
 
     def __init__(self, logger: Logger, *args):
         self.tags = [str(a) for a in args]
+        super().__init__(logger, None)
 
     def process(self, msg, kwargs):
         """
