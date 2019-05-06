@@ -20,5 +20,7 @@ class TaggedLogger(LoggerAdapter):
             kwargs['extra'] = {}
         if 'tags' not in kwargs['extra']:
             kwargs['extra']['tags'] = set()
+        if isinstance(kwargs['extra']['tags'], list):
+             kwargs['extra']['tags'] = set(kwargs['extra']['tags'])
         kwargs['extra']['tags'].update(self.tags)
         return msg, kwargs
