@@ -21,7 +21,16 @@ Example:
 
 ```python
 from typing import Dict, Any
+
+# Import the DBLogHandler from dblogger directly to auto-detect the used DB
+# Adapter
 from dblogger import DBLogHandler
+
+# Alternatively import the correct handler directly:
+# ``from dblogger.sync_handler import DBLogHandler``
+# or
+# ``from dblogger.async_handler import DBLogHandler``
+
 from logging import getLogger
 
 
@@ -66,6 +75,41 @@ tagged = TaggedLogger(logger, 'a', 'b')
 tagged.debug('This tagged logger will add tags "a" and "b" to all log records')
 tagged.debug('You may even add more tags like "c"', extra={'tags': ['c']})
 ```
+
+### Special considerations for async logging
+
+#### Draining the log queue before shutting down
+
+If you're using the async log handler make sure to run the `drain()` function before
+stopping the event loop:
+
+```python
+await handler.drain()
+```
+
+#### Async filters
+
+If you need an `async` filter (for example a filter that loads information from a DB)
+you can import `AsyncFilter` from the `async_handler` submodule and add those to the
+log handler with the corresponding functions:
+
+```python
+from dblogger.async_handler import AsyncFilter
+
+class MyAsyncFilter(AsyncFilter):
+
+    async def async_filter(self, record: logging.LogRecord):
+        return True
+
+filter = MyAsyncFilter()
+
+# add filter
+handler.addAsyncFilter(filter)
+
+# remove filter
+handler.removeAsyncFilter(filter)
+```
+
 
 ### Setting up the database
 

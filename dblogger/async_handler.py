@@ -10,7 +10,13 @@ from asyncpg.pool import Pool
 
 from .async_models import LogLogger, LogSource, LogHost, LogFunction, LogTag, LogEntry
 
-__all__ = ['DBLogHandler']
+__all__ = ['DBLogHandler', 'AsyncFilter']
+
+
+class AsyncFilter():
+
+    async def async_filter(self, record: LogRecord):
+        return True
 
 
 class DBLogHandler(Handler):
@@ -32,6 +38,7 @@ class DBLogHandler(Handler):
 
     # internal state
     logger_name: str
+    async_filters: List[AsyncFilter]
 
     def __init__(
         self, name: str,
@@ -68,9 +75,24 @@ class DBLogHandler(Handler):
             else:
                 self.db_config = f'postgresql://{db_host}:{db_port}/{db_name}'
 
+        self.async_filters = []
         self.logger_name = name
         self.createLock()
         super().__init__(level=level)
+
+    def addAsyncFilter(self, filter: AsyncFilter):
+        """
+        Add the specified async filter to this handler.
+        """
+        if not (filter in self.async_filters):
+            self.async_filters.append(filter)
+
+    def removeAsyncFilter(self, filter: AsyncFilter):
+        """
+        Remove the specified async filter from this handler.
+        """
+        if filter in self.async_filters:
+            self.async_filters.remove(filter)
 
     def emit(self, record: LogRecord):
         self.acquire()
@@ -87,7 +109,6 @@ class DBLogHandler(Handler):
 
         if self.emitter is not None:
             await self.emitter
-
 
     async def log_emitter(self):
         if self.db is None:
@@ -109,6 +130,19 @@ class DBLogHandler(Handler):
         self.emitter = None
 
     async def async_emit(self, record: LogRecord):
+        # run all async filters
+        rv = True
+        for f in self.async_filters:
+            if hasattr(f, 'async_filter'):
+                result = await f.async_filter(record)
+            else:
+                result = await f(record) # assume callable - will raise if not
+            if not result:
+                rv = False
+                break
+        if not rv:
+            return
+
         try:
             src = self.src_cache.get(record.pathname, None)
             if src is None:
