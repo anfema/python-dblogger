@@ -193,6 +193,8 @@ class DBLogHandler(Handler):
             tags_names = getattr(record, 'tags', set())
             tags: List[LogTag] = []
             for tag_name in tags_names:
+                if tag_name is None or tag_name == '':
+                    continue
                 tag = self.tag_cache.get(tag_name, None)
                 if tag is None:
                     tag = await LogTag.get_or_create(self.db, name=tag_name)
