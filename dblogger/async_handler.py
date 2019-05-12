@@ -3,7 +3,7 @@ import asyncio
 import socket
 
 from datetime import datetime
-from logging import Handler, Logger, NOTSET, LogRecord
+from logging import Handler, Logger, NOTSET, LogRecord, getLogger
 
 from asyncpg import Connection, connect
 from asyncpg.pool import Pool
@@ -17,6 +17,8 @@ class AsyncFilter():
 
     async def async_filter(self, record: LogRecord):
         return True
+
+logger = getLogger('dblogger')
 
 
 class DBLogHandler(Handler):
@@ -124,8 +126,12 @@ class DBLogHandler(Handler):
             self.queue = []
             self.release()
 
-            for record in q:
-                await self.async_emit(record)
+            try:
+                for record in q:
+                    await self.async_emit(record)
+            except Exception as e:
+                self.emitter = None
+                logger.exception(e)
 
         self.emitter = None
 
@@ -133,13 +139,17 @@ class DBLogHandler(Handler):
         # run all async filters
         rv = True
         for f in self.async_filters:
-            if hasattr(f, 'async_filter'):
-                result = await f.async_filter(record)
-            else:
-                result = await f(record) # assume callable - will raise if not
-            if not result:
-                rv = False
-                break
+            try:
+                if hasattr(f, 'async_filter'):
+                    result = await f.async_filter(record)
+                else:
+                    result = await f(record) # assume callable - will raise if not
+                if not result:
+                    rv = False
+                    break
+            except Exception as e:
+                rv = True
+                logger.exception(e)
         if not rv:
             return
 
