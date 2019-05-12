@@ -131,7 +131,6 @@ class DBLogHandler(Handler):
                     await self.async_emit(record)
             except Exception as e:
                 self.emitter = None
-                logger.exception(e)
 
         self.emitter = None
 
@@ -149,7 +148,6 @@ class DBLogHandler(Handler):
                     break
             except Exception as e:
                 rv = True
-                logger.exception(e)
         if not rv:
             return
 
