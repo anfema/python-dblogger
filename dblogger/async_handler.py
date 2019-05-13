@@ -1,9 +1,10 @@
-from typing import List, Any, Optional, Dict, Tuple
+from typing import List, Any, Optional, Dict, Tuple, Deque
 import asyncio
 import socket
 
 from datetime import datetime
-from logging import Handler, Logger, NOTSET, LogRecord, getLogger
+from collections import deque
+from logging import Handler, Logger, NOTSET, LogRecord
 
 from asyncpg import Connection, connect
 from asyncpg.pool import Pool
@@ -18,8 +19,6 @@ class AsyncFilter():
     async def async_filter(self, record: LogRecord):
         return True
 
-logger = getLogger('dblogger')
-
 
 class DBLogHandler(Handler):
 
@@ -28,8 +27,9 @@ class DBLogHandler(Handler):
     db_config: Optional[str] = None
 
     # state
-    queue: List[LogRecord] = []
-    emitter: Optional[asyncio.Task] = None
+    queue: Deque[LogRecord] = deque()
+    start_emitting: asyncio.Future
+    stop_emitting: asyncio.Future
 
     # caches
     src_cache: Dict[str, LogSource] = {}
@@ -77,6 +77,12 @@ class DBLogHandler(Handler):
             else:
                 self.db_config = f'postgresql://{db_host}:{db_port}/{db_name}'
 
+        loop = asyncio.get_event_loop()
+        self.start_emitting = loop.create_future()
+        self.stop_emitting = loop.create_future()
+        self.stop_emitting.set_result(True)
+        loop.create_task(self.log_emitter())
+
         self.async_filters = []
         self.logger_name = name
         self.createLock()
@@ -97,42 +103,49 @@ class DBLogHandler(Handler):
             self.async_filters.remove(filter)
 
     def emit(self, record: LogRecord):
-        self.acquire()
         self.queue.append(record)
 
-        if self.emitter is None:
-            loop = asyncio.get_event_loop()
-            self.emitter = loop.create_task(self.log_emitter())
-        self.release()
+        if not self.start_emitting.done():
+            self.start_emitting.set_result(True)
 
     async def drain(self):
-        if len(self.queue) > 0 and self.emitter is None:
-            await self.log_emitter()
-
-        if self.emitter is not None:
-            await self.emitter
+        if not self.stop_emitting.done():
+            await self.stop_emitting
 
     async def log_emitter(self):
         if self.db is None:
             if self.db_config is None:
                 raise RuntimeWarning('DB handle was closed, can not continue')
             self.acquire()
-            self.db = await connect(dsn=self.db_config)
-            self.release()
-
-        while len(self.queue) > 0:
-            self.acquire()
-            q = self.queue
-            self.queue = []
-            self.release()
-
             try:
-                for record in q:
-                    await self.async_emit(record)
-            except Exception as e:
-                self.emitter = None
+                self.db = await connect(dsn=self.db_config)
+            except Exception:
+                return
+            self.release()
 
-        self.emitter = None
+        loop = asyncio.get_event_loop()
+
+        try:
+            while True:
+                await self.start_emitting
+                self.stop_emitting = loop.create_future()
+
+                try:
+                    record = self.queue.popleft()
+                except IndexError:
+                    record = None
+
+                while record is not None:
+                    await self.async_emit(record)
+                    try:
+                        record = self.queue.popleft()
+                    except IndexError:
+                        break
+
+                self.stop_emitting.set_result(True)
+                self.start_emitting = loop.create_future()
+        except asyncio.CancelledError:
+            return
 
     async def async_emit(self, record: LogRecord):
         # run all async filters
@@ -146,7 +159,7 @@ class DBLogHandler(Handler):
                 if not result:
                     rv = False
                     break
-            except Exception as e:
+            except Exception:
                 rv = True
         if not rv:
             return
